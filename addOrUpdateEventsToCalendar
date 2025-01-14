@@ -1,0 +1,73 @@
+function addOrUpdateEventsToCalendar() {
+  // Access the Google Sheet
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  const range = sheet.getDataRange();
+  const values = range.getValues();
+
+  // Get the calendar by its ID
+  const calendar = CalendarApp.getCalendarById('13bee852c9fe59f8fa8c728c0b2e30ae41a2e06523925d7081d97fee7ee01859@group.calendar.google.com');
+
+  // Loop through all the rows starting from row 2 (assuming row 1 has headers)
+  for (let i = 1; i < values.length; i++) {
+    const title = values[i][0]; // Column A (Нэр)
+    const dateTime = values[i][1]; // Column B (Хурлын өдөр, цаг)
+    const eventId = values[i][15]; // Column P (Event ID - for tracking added events)
+
+    // Check if both title and date are present; if not, skip to the next row
+    if (!title || !dateTime) {
+      continue; // Skip rows without title or date
+    }
+
+    const location = values[i][12]; // Column M (Уулзалтын байршил)
+    const notes = values[i][13]; // Column N (Хурлын тэмдэглэл)
+    const others = values[i][14]; // Column O (Бусад)
+
+    // Build a description including details from the other columns, with a bold line at the top
+    let description = '<b>Уулзалтын талаарх дэлгэрэнгүй мэдээлэл</b>\n'; // Only this line is bold
+    description += `Сайд: ${values[i][2] ? "Оролцоно" : "Оролцохгүй"}\n`; // Column C (Сайд checkbox)
+    description += `ТНБД: ${values[i][3] ? "Оролцоно" : "Оролцохгүй"}\n`; // Column D (ТНБД checkbox)
+    description += `Энхтайван: ${values[i][4] ? "Оролцоно" : "Оролцохгүй"}\n`; // Column E (Энхтайван checkbox)
+    description += `Уулзалт хүссэн тал: ${values[i][5]}\n`; // Column F (Уулзалт хүссэн тал)
+    description += `Уулзалт хүссэн хэлбэр: ${values[i][6] ? "Тийм" : "Үгүй"}\n`; // Column G (Уулзалт хүссэн хэлбэр checkbox)
+    description += `Дугаар/нэр/утас: ${values[i][7]}\n`; // Column H (Албан тоотын дугаар)
+    description += `Хурлын агуулга: ${values[i][8]}\n`; // Column I (Хурлын агуулга)
+    description += `Яамны төлөөлөл: ${values[i][9]}\n`; // Column J (Яамны төлөөлөл)
+    description += `ГХАГ төлөөлөл: ${values[i][10]}\n`; // Column K (ГХАГ төлөөлөл)
+    description += `Явц: ${values[i][11]}\n`; // Column L (Явц)
+    description += `Хурлын тэмдэглэл: ${notes}\n`; // Column N (Хурлын тэмдэглэл)
+    description += `Бусад: ${others}\n`; // Column O (Бусад)
+
+    const startDate = new Date(dateTime);
+    const endDate = new Date(startDate);
+    endDate.setHours(endDate.getHours() + 1); // Assuming the meeting lasts 1 hour
+
+    // If eventId exists, update the existing event
+    if (eventId) {
+      try {
+        let event = calendar.getEventById(eventId);
+        if (event) {
+          event.setTitle(title);
+          event.setTime(startDate, endDate);
+          event.setLocation(location);
+          event.setDescription(description);
+          event.removeAllReminders(); // Remove existing reminders to avoid duplicates
+          event.addPopupReminder(60); // Add a popup reminder 1 hour before the event
+        }
+      } catch (e) {
+        Logger.log(`Error updating event with ID ${eventId}: ${e.message}`);
+      }
+    } else {
+      // If no eventId, create a new event
+      const newEvent = calendar.createEvent(title, startDate, endDate, {
+        location: location,
+        description: description
+      });
+
+      // Add a popup reminder 1 hour before the event
+      newEvent.addPopupReminder(60);
+
+      // Store the new event ID in Column P (index 15, as it's the 16th column)
+      sheet.getRange(i + 1, 16).setValue(newEvent.getId());
+    }
+  }
+}
